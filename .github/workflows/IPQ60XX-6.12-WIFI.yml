@@ -141,7 +141,7 @@ jobs:
         cd $OPENWRT_PATH/bin/targets/*/*
         cat sha256sums
         cp $OPENWRT_PATH/.config build.config
-        mv -f $OPENWRT_PATH/bin/packages/*/*/*.apk packages
+        mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
         tar -zcf Packages.tar.gz packages
         rm -rf packages feeds.buildinfo version.buildinfo
         echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
@@ -175,3 +175,11 @@ jobs:
           - 固件内核版本：${{ env.VERSION_KERNEL }}
           - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
           - ${{ env.VERSION_INFO }}
+
+    - name: Upload Build Artifacts (上传构建文件，无论成功与否)
+      if: always() # 确保无论工作流成功或失败都执行
+      uses: actions/upload-artifact@main
+      with:
+        name: build-artifacts
+        path: ${{ env.OPENWRT_PATH }}/bin/targets
+
