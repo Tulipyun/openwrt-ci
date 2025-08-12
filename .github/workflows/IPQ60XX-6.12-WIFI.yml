@@ -117,6 +117,7 @@ jobs:
         find dl -size -1024c -exec rm -f {} \;
         
     - name: Customize opkg distfeeds.conf for USTC mirrors
+      working-directory: ${{ env.OPENWRT_PATH }}
       run: |
         # 创建所需的目录结构，-p 选项确保在目录已存在时不报错
         mkdir -p ./files/etc/opkg
