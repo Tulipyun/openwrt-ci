@@ -115,6 +115,24 @@ jobs:
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
+        
+    - name: Customize opkg distfeeds.conf for USTC mirrors
+      run: |
+        # 创建所需的目录结构，-p 选项确保在目录已存在时不报错
+        mkdir -p ./files/etc/opkg
+
+        # 使用 "here document" (cat <<'EOF') 方法将多行文本写入文件
+        # 这种方法会完全覆盖目标文件，确保不保留任何原始内容
+        # 使用 'EOF' (带单引号) 可以防止任何 Shell 变量扩展，确保内容原样写入
+        cat <<'EOF' > ./files/etc/opkg/distfeeds.conf
+        src/gz libwrt_base https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/base
+        src/gz libwrt_luci https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/luci/
+        src/gz libwrt_packages https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/packages
+        src/gz libwrt_routing https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/routing
+        src/gz libwrt_telephony https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/telephony
+        EOF
+        
+        echo "Successfully created custom distfeeds.conf."
 
     - name: Compile Firmware(开始编译固件)
       id: compile
