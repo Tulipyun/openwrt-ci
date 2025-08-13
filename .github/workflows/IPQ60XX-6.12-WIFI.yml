@@ -196,3 +196,27 @@ jobs:
           - 固件内核版本：${{ env.VERSION_KERNEL }}
           - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
           - ${{ env.VERSION_INFO }}
+
+
+# 新增一个专门用于清理旧版本的 Job
+  Cleanup-Releases:
+    # 设置此 Job 必须在 Build 这个 Job 成功完成后才运行
+    needs: [Build]
+    runs-on: ubuntu-22.04
+    # 设置一个超时，以防万一
+    timeout-minutes: 5
+
+    steps:
+      - name: Delete Older Releases
+        uses: dev-drpr/delete-older-releases@v0.4.0
+        with:
+          # 【关键】设置保留最新 Releases 的数量为 3 个
+          keep_latest: 3
+          # 设置要操作的仓库，默认就是当前仓库，一般无需修改
+          repo: ${{ github.repository }}
+          # 【重要】同时删除与 Release 关联的 Git 标签。
+          # 推荐设置为 true，否则您的标签列表会越来越长。
+          delete_tags: true
+        env:
+          # 这是授权此 Action 操作您仓库所必需的令牌
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
