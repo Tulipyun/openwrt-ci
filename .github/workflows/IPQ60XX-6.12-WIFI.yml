@@ -22,36 +22,35 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Check Server Performance (检查服务器性能)
+    - name: Check Server Performance(检查服务器性能)
       run: |
-        echo "WARNING: limited server resources. If many packages are selected, watch CPU."
-        echo "Known CPU models (descending): 7763, 8370C, 8272CL, 8171M, E5-2673"
-        echo "---- CPU info ----"
-        echo "Physical CPUs: $(cat /proc/cpuinfo | grep 'physical id' | sort | uniq | wc -l)"
-        echo "CPU models and counts:"
-        cat /proc/cpuinfo | grep 'model name' | cut -f2 -d: | sort | uniq -c || true
-        echo "---- Memory info ----"
-        sudo lshw -short -C memory | grep GiB || true
-        echo "---- Disk info ----"
-        df -hT || true
+        echo "警告⚠"
+        echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
+        echo -e "已知CPU型号（降序）：7763，8370C，8272CL，8171M，E5-2673 \n"
+        echo "--------------------------CPU信息--------------------------"
+        echo "CPU物理数量：$(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
+        echo -e "CPU核心信息：$(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
+        echo "--------------------------内存信息--------------------------"
+        echo "已安装内存详细信息："
+        echo -e "$(sudo lshw -short -C memory | grep GiB) \n"
+        echo "--------------------------硬盘信息--------------------------"
+        echo "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
 
-    - name: Initialization Environment (初始化环境)
+    - name: Initialization Environment(初始化环境)
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        set -e
-        docker rmi $(docker images -q) || true
-        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android "$AGENT_TOOLSDIRECTORY" || true
+        docker rmi $(docker images -q)
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
         sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
         sudo -E apt-get -y update
-        # install dependencies using your original script reference
-        sudo -E apt-get -y install $(curl -fsSL is.gd/depends_ubuntu_2204) || true
-        sudo -E systemctl daemon-reload || true
-        sudo -E apt-get -y autoremove --purge || true
-        sudo -E apt-get -y clean || true
+        sudo -E apt-get -y install $(curl -fsSL is.gd/depends_ubuntu_2204)
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get -y clean
         sudo timedatectl set-timezone "$TZ"
 
-    - name: Combine Disks (合并磁盘)
+    - name: Combine Disks(合并磁盘)
       uses: easimon/maximize-build-space@master
       with:
         swap-size-mb: 1024
@@ -59,207 +58,139 @@ jobs:
         root-reserve-mb: 1024
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@main
 
-    - name: Clone Source Code (克隆源代码)
+    - name: Clone Source Code(克隆源代码)
       run: |
-        set -e
-        df -hT "$GITHUB_WORKSPACE" || true
-        git clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" openwrt
+        df -hT $GITHUB_WORKSPACE
+        git clone --depth 1 -b $REPO_BRANCH $REPO_URL openwrt
         cd openwrt
         echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
         VERSION_INFO=$(git show -s --date=short --format="作者: %an<br/>时间: %cd<br/>内容: %s<br/>hash: %H")
         echo "VERSION_INFO=$VERSION_INFO" >> $GITHUB_ENV
-        VERSION_KERNEL=$(grep -oP 'LINUX_KERNEL_HASH-\K[0-9]+\.[0-9]+\.[0-9]+' target/linux/generic/kernel-6.12 || true)
+        VERSION_KERNEL=$(grep -oP 'LINUX_KERNEL_HASH-\K[0-9]+\.[0-9]+\.[0-9]+' target/linux/generic/kernel-6.12)
         echo "VERSION_KERNEL=$VERSION_KERNEL" >> $GITHUB_ENV
 
-    - name: Generate Variables (生成变量)
+    - name: Generate Variables(生成变量)
       run: |
-        set -e
-        cp "$CONFIG_FILE" "$OPENWRT_PATH/.config" || true
-        cd "$OPENWRT_PATH"
-        make defconfig > /dev/null 2>&1 || true
-        SOURCE_REPO=$(echo "$REPO_URL" | awk -F '/' '{print $(NF)}')
+        cp $CONFIG_FILE $OPENWRT_PATH/.config
+        cd $OPENWRT_PATH
+        make defconfig > /dev/null 2>&1
+        SOURCE_REPO="$(echo $REPO_URL | awk -F '/' '{print $(NF)}')"
         echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
-        DEVICE_TARGET=$(grep CONFIG_TARGET_BOARD .config | awk -F '"' '{print $2}' || true)
+        DEVICE_TARGET=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
         echo "DEVICE_TARGET=$DEVICE_TARGET" >> $GITHUB_ENV
-        DEVICE_SUBTARGET=$(grep CONFIG_TARGET_SUBTARGET .config | awk -F '"' '{print $2}' || true)
+        DEVICE_SUBTARGET=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
         echo "DEVICE_SUBTARGET=$DEVICE_SUBTARGET" >> $GITHUB_ENV
-        echo "FIRMWARE_TAG=${FIRMWARE_TAG}-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+        echo "FIRMWARE_TAG=IPQ60XX-6.12-WIFI-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
 
-    - name: Cache Toolchain (缓存工具链)
+
+    - name: Cache Toolchain(缓存工具链)
       if: env.CACHE_TOOLCHAIN == 'true'
       uses: HiGarfield/cachewrtbuild@main
       with:
         ccache: false
         mixkey: ${{ env.SOURCE_REPO }}-${{ env.REPO_BRANCH }}-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
         prefix: ${{ env.OPENWRT_PATH }}
-
-    - name: Install Feeds (安装feeds)
+    
+    - name: Install Feeds(安装feeds)
       run: |
-        set -e
-        cd "$OPENWRT_PATH"
+        cd $OPENWRT_PATH
         ./scripts/feeds update -a
-        git clone --depth 1 https://github.com/sbwml/openwrt_pkgs.git package/new/custom || true
-        mv package/new/custom/luci-app-netspeedtest package/new 2>/dev/null || true
-        mv package/new/custom/speedtest-cli package/new 2>/dev/null || true
-        rm -rf package/new/custom || true
+        git clone --depth 1 https://github.com/sbwml/openwrt_pkgs.git package/new/custom
+        mv package/new/custom/luci-app-netspeedtest  package/new
+        mv package/new/custom/speedtest-cli package/new
+        rm -rf package/new/custom
         ./scripts/feeds install -a
-
-    - name: Ensure CMake compatibility patches for multiple packages (长期补丁)
+  
+    - name: Load Custom Configuration(加载自定义配置)
       run: |
-        set -euo pipefail
-        cd "$OPENWRT_PATH"
-        echo "Preparing patches for packages that may declare old cmake_minimum_required..."
+        [ -e files ] && mv files $OPENWRT_PATH/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRT_PATH/.config
 
-        # White-list of package directories (names). Add more names here as needed.
-        PKGS="libwebsockets libnatpmp libmicrohttpd mbedtls"
-
-        PATCHES_CREATED=0
-
-        for pkg in $PKGS; do
-          # Check common locations
-          if [ -d "feeds/packages/libs/$pkg" ]; then
-            PKG_DIR="feeds/packages/libs/$pkg"
-          elif [ -d "package/libs/$pkg" ]; then
-            PKG_DIR="package/libs/$pkg"
-          else
-            PKG_DIR=""
-          fi
-
-          if [ -n "$PKG_DIR" ]; then
-            mkdir -p "$PKG_DIR/patches"
-            PATCH_FILE="$PKG_DIR/patches/001-fix-cmake-version.patch"
-            cat > "$PATCH_FILE" <<'EOF'
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@
--cmake_minimum_required(VERSION 2.8)
-+cmake_minimum_required(VERSION 3.5)
-EOF
-            echo "Wrote patch to $PATCH_FILE"
-            PATCHES_CREATED=$((PATCHES_CREATED+1))
-          else
-            echo "Package directory not found for $pkg, skipping"
-          fi
-        done
-
-        echo "Created $PATCHES_CREATED patch file(s)."
-
-        # Remove any existing build_dir unpacked directories for those packages to force re-prepare
-        echo "Cleaning build_dir entries for affected packages..."
-        for pkg in $PKGS; do
-          matches=$(ls -d build_dir/*/*/${pkg}* 2>/dev/null || true)
-          if [ -n "$matches" ]; then
-            echo "Removing build_dir entries for $pkg:"
-            echo "$matches"
-            rm -rf $matches
-          else
-            echo "No build_dir entries for $pkg"
-          fi
-        done
-
-        echo "Patch preparation complete."
-
-    - name: Load Custom Configuration (加载自定义配置)
+    - name: Download DL Package(下载DL软件包)
       run: |
-        set -e
-        cd "$OPENWRT_PATH"
-        [ -e files ] && mv files "$OPENWRT_PATH/files" || true
-        [ -e "$CONFIG_FILE" ] && cp "$CONFIG_FILE" .config || true
-
-    - name: Download DL Package (下载DL软件包)
-      run: |
-        set -e
-        cd "$OPENWRT_PATH"
-        make defconfig || true
-        make download -j8 || true
-        # remove very small dl files (likely corrupted)
-        find dl -size -1024c -exec ls -l {} \; || true
-        find dl -size -1024c -exec rm -f {} \; || true
-
+        cd $OPENWRT_PATH
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+        
     - name: Customize opkg distfeeds.conf for USTC mirrors
       working-directory: ${{ env.OPENWRT_PATH }}
       run: |
+        # 创建所需的目录结构，-p 选项确保在目录已存在时不报错
         mkdir -p ./files/etc/opkg
-        cat > ./files/etc/opkg/distfeeds.conf <<'EOF'
-src/gz libwrt_base https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/base
-src/gz libwrt_luci https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/luci/
-src/gz libwrt_packages https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/packages
-src/gz libwrt_routing https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/routing
-src/gz libwrt_telephony https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/telephony
-EOF
-        echo "Created custom distfeeds.conf"
 
-    - name: Optional: add Makefile fallback for libwebsockets (non-critical)
-      working-directory: ${{ env.OPENWRT_PATH }}
+        # 使用 "here document" (cat <<'EOF') 方法将多行文本写入文件
+        # 这种方法会完全覆盖目标文件，确保不保留任何原始内容
+        # 使用 'EOF' (带单引号) 可以防止任何 Shell 变量扩展，确保内容原样写入
+        cat <<'EOF' > ./files/etc/opkg/distfeeds.conf
+        src/gz libwrt_base https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/base
+        src/gz libwrt_luci https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/luci/
+        src/gz libwrt_packages https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/packages
+        src/gz libwrt_routing https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/routing
+        src/gz libwrt_telephony https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/telephony
+        EOF
+        
+        echo "Successfully created custom distfeeds.conf."
+
+    - name: Patch libwebsockets Makefile (Apply Solution 2)
+      working-directory: ${{ env.OPENWRT_PATH }} # <-- 关键：指定工作目录
       run: |
-        MF="feeds/packages/libs/libwebsockets/Makefile"
-        if [ -f "$MF" ]; then
-          if ! grep -q "CMAKE_POLICY_VERSION_MINIMUM" "$MF"; then
-            echo "Appending CMAKE_POLICY_VERSION_MINIMUM to libwebsockets Makefile"
-            echo "" >> "$MF"
-            echo "CMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5" >> "$MF"
-          else
-            echo "libwebsockets Makefile already contains CMAKE_POLICY_VERSION_MINIMUM"
-          fi
-        else
-          echo "libwebsockets Makefile not present, skipping fallback Makefile edit"
-        fi
+        echo "Current directory: $PWD"
+        echo "Patching libwebsockets Makefile..."
+        # 在 Makefile 中找到 libwebsockets 的 Cmake 定义，并追加策略版本号
+        sed -i '/define Package\/libwebsockets\/cmake/a \
+          CMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        ' feeds/packages/libs/libwebsockets/Makefile
+        echo "Patch applied successfully."
+    
 
-    - name: Compile Firmware (开始编译固件)
+
+    - name: Compile Firmware(开始编译固件)
       id: compile
       run: |
-        set -e
-        cd "$OPENWRT_PATH"
-        echo "Starting build (parallel). If it fails, will retry single-thread verbose."
-        if make -j$(nproc); then
-          echo "status=success" >> $GITHUB_OUTPUT
-        else
-          echo "Parallel build failed. Retrying single-thread verbose..."
-          if make -j1 V=s; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-        fi
-        echo "DATE=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
-        echo "FILE_DATE=$(date '+%Y.%m.%d')" >> $GITHUB_ENV
+        cd $OPENWRT_PATH
+        echo "Compiling with 1 thread and verbose output for debugging..."
+        # 使用 -j1 V=s 强制单线程和详细日志，以便我们看到第一个确切的错误
+        make -j1 V=s
+        
+        # 如果编译成功，才继续
+        echo "status=success" >> $GITHUB_OUTPUT
+        echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
+        echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
 
-    - name: Check Space Usage (检查空间使用情况)
-      if: always()
+    - name: Check Space Usage(检查空间使用情况)
+      if: (!cancelled())
       run: df -hT
 
-    - name: Upload Bin Directory (上传固件)
+    - name: Upload Bin Directory(上传固件)
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@main
       with:
         name: ${{ env.SOURCE_REPO }}-bin-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
         path: ${{ env.OPENWRT_PATH }}/bin
 
-    - name: Organize Files (整理文件)
+    - name: Organize Files(整理文件)
       if: steps.compile.outputs.status == 'success'
       run: |
-        set -e
-        cd "$OPENWRT_PATH/bin/targets" || true
-        cd */* || true
-        if [ -f sha256sums ]; then cat sha256sums; fi
-        cp "$OPENWRT_PATH/.config" build.config || true
-        mkdir -p packages || true
-        mv -f "$OPENWRT_PATH/bin/packages"/*/*/*.ipk packages 2>/dev/null || true
-        tar -zcf Packages.tar.gz packages || true
-        rm -rf packages feeds.buildinfo version.buildinfo || true
+        cd $OPENWRT_PATH/bin/targets/*/*
+        cat sha256sums
+        cp $OPENWRT_PATH/.config build.config
+        mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
+        tar -zcf Packages.tar.gz packages
+        rm -rf packages feeds.buildinfo version.buildinfo
         echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
 
-    - name: Upload Firmware To Artifact (将固件上传到Artifact)
+    - name: Upload Firmware To Artifact(将固件上传到Artifact)
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE != 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@main
       with:
         name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE_PATH }}
 
-    - name: Upload Firmware To Release (发布固件)
+    - name: Upload Firmware To Release(发布固件)
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
       uses: ncipollo/release-action@v1
       with:
@@ -270,34 +201,46 @@ EOF
         artifacts: ${{ env.FIRMWARE_PATH }}/*
         body: |
           **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
-          ### Firmware info
-          - Source: ${{ env.REPO_URL }}
-          - Branch: ${{ env.REPO_BRANCH }}
-          - Kernel: ${{ env.VERSION_KERNEL }}
-          - Last commit: ${{ env.VERSION_INFO }}
+          ### 📒 固件信息(WIFI)
+          - 带WIFI带有线NSS的6.12内核固件
+          - 💻 这是 ${{ env.FIRMWARE_TAG }} 平台使用的 OpenWrt 固件
+          - ⚽ 固件源码: ${{ env.REPO_URL }}
+          - 💝 源码分支: ${{ env.REPO_BRANCH }}
+          - 🌐 默认地址: 192.168.1.1
+          - 🔑 默认密码: password
+          ### 🧊 固件版本
+          - 固件内核版本：${{ env.VERSION_KERNEL }}
+          - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
+          - ${{ env.VERSION_INFO }}
 
+
+# 新增一个专门用于清理旧版本的 Job
   Cleanup-Releases:
     needs: [Build]
     runs-on: ubuntu-22.04
-    timeout-minutes: 10
+    timeout-minutes: 5
+
     steps:
       - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: sudo apt-get update && sudo apt-get install jq -y
 
       - name: Delete old releases and tags except latest 3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          set -e
-          releases=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/releases?per_page=100")
+          # 获取所有 release 信息，保留最新 3 个，其余全部删除
+          releases=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO/releases?per_page=100")
+          # 获取要删除的 release id 和 tag_name
           ids_and_tags=$(echo "$releases" | jq -r '.[3:][] | "\(.id) \(.tag_name)"')
+          # 循环删除 release 和 tag
           while read -r release_id tag_name; do
-            if [ -n "$release_id" ]; then
-              curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/releases/$release_id"
-            fi
-            if [ -n "$tag_name" ]; then
-              curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/git/refs/tags/$tag_name"
-            fi
+            # 删除 release
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$REPO/releases/$release_id"
+            # 删除 tag，refs/tags/{tag_name}
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$REPO/git/refs/tags/$tag_name"
             echo "Deleted release $release_id and tag $tag_name"
           done <<< "$ids_and_tags"
