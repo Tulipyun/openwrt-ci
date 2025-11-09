@@ -78,12 +78,11 @@ jobs:
         make defconfig > /dev/null 2>&1
         SOURCE_REPO="$(echo $REPO_URL | awk -F '/' '{print $(NF)}')"
         echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
-        DEVICE_TARGET=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
+        DEVICE_TARGET=$(grep CONFIG_TARGET_BOARD .config | awk -F '"' '{print $2}')
         echo "DEVICE_TARGET=$DEVICE_TARGET" >> $GITHUB_ENV
-        DEVICE_SUBTARGET=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        DEVICE_SUBTARGET=$(grep CONFIG_TARGET_SUBTARGET .config | awk -F '"' '{print $2}')
         echo "DEVICE_SUBTARGET=$DEVICE_SUBTARGET" >> $GITHUB_ENV
         echo "FIRMWARE_TAG=IPQ60XX-6.12-WIFI-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
-
 
     - name: Cache Toolchain(缓存工具链)
       if: env.CACHE_TOOLCHAIN == 'true'
@@ -92,7 +91,7 @@ jobs:
         ccache: false
         mixkey: ${{ env.SOURCE_REPO }}-${{ env.REPO_BRANCH }}-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
         prefix: ${{ env.OPENWRT_PATH }}
-    
+
     - name: Install Feeds(安装feeds)
       run: |
         cd $OPENWRT_PATH
@@ -102,7 +101,28 @@ jobs:
         mv package/new/custom/speedtest-cli package/new
         rm -rf package/new/custom
         ./scripts/feeds install -a
-  
+
+    # ✅ 新增：自动检测并修复所有低版本 CMakeLists.txt（多包通用方案）
+    - name: Patch CMakeLists.txt in multiple packages
+      working-directory: ${{ env.OPENWRT_PATH }}
+      run: |
+        echo "🔧 Searching for outdated CMakeLists.txt files..."
+        PATCHED_COUNT=0
+        find feeds/packages/libs -type f -name "CMakeLists.txt" | while read FILE; do
+          if grep -q "cmake_minimum_required(VERSION" "$FILE"; then
+            VERSION=$(grep "cmake_minimum_required(VERSION" "$FILE" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?')
+            if [ "$(printf '%s\n' "$VERSION" 3.5 | sort -V | head -n1)" != "3.5" ]; then
+              echo "📦 Patching $FILE (was $VERSION → now 3.5)"
+              sed -i 's/cmake_minimum_required(VERSION [0-9.]\+)/cmake_minimum_required(VERSION 3.5)/' "$FILE"
+              PATCHED_COUNT=$((PATCHED_COUNT + 1))
+            fi
+          fi
+        done
+        echo "✅ Patched $PATCHED_COUNT CMakeLists.txt file(s)."
+        if [ "$PATCHED_COUNT" -eq 0 ]; then
+          echo "ℹ️ No outdated CMakeLists.txt found — all good."
+        fi
+
     - name: Load Custom Configuration(加载自定义配置)
       run: |
         [ -e files ] && mv files $OPENWRT_PATH/files
@@ -115,16 +135,11 @@ jobs:
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
-        
+
     - name: Customize opkg distfeeds.conf for USTC mirrors
       working-directory: ${{ env.OPENWRT_PATH }}
       run: |
-        # 创建所需的目录结构，-p 选项确保在目录已存在时不报错
         mkdir -p ./files/etc/opkg
-
-        # 使用 "here document" (cat <<'EOF') 方法将多行文本写入文件
-        # 这种方法会完全覆盖目标文件，确保不保留任何原始内容
-        # 使用 'EOF' (带单引号) 可以防止任何 Shell 变量扩展，确保内容原样写入
         cat <<'EOF' > ./files/etc/opkg/distfeeds.conf
         src/gz libwrt_base https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/base
         src/gz libwrt_luci https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/luci/
@@ -132,31 +147,14 @@ jobs:
         src/gz libwrt_routing https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/routing
         src/gz libwrt_telephony https://chinanet.mirrors.ustc.edu.cn/immortalwrt/releases/24.10.2/packages/aarch64_cortex-a53/telephony
         EOF
-        
         echo "Successfully created custom distfeeds.conf."
-
-    - name: Patch libwebsockets Makefile (Apply Solution 2)
-      working-directory: ${{ env.OPENWRT_PATH }} # <-- 关键：指定工作目录
-      run: |
-        echo "Current directory: $PWD"
-        echo "Patching libwebsockets Makefile..."
-        # 在 Makefile 中找到 libwebsockets 的 Cmake 定义，并追加策略版本号
-        sed -i '/define Package\/libwebsockets\/cmake/a \
-          CMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-        ' feeds/packages/libs/libwebsockets/Makefile
-        echo "Patch applied successfully."
-    
-
 
     - name: Compile Firmware(开始编译固件)
       id: compile
       run: |
         cd $OPENWRT_PATH
         echo "Compiling with 1 thread and verbose output for debugging..."
-        # 使用 -j1 V=s 强制单线程和详细日志，以便我们看到第一个确切的错误
         make -j1 V=s
-        
-        # 如果编译成功，才继续
         echo "status=success" >> $GITHUB_OUTPUT
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
@@ -213,8 +211,6 @@ jobs:
           - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
           - ${{ env.VERSION_INFO }}
 
-
-# 新增一个专门用于清理旧版本的 Job
   Cleanup-Releases:
     needs: [Build]
     runs-on: ubuntu-22.04
@@ -229,17 +225,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # 获取所有 release 信息，保留最新 3 个，其余全部删除
           releases=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/$REPO/releases?per_page=100")
-          # 获取要删除的 release id 和 tag_name
           ids_and_tags=$(echo "$releases" | jq -r '.[3:][] | "\(.id) \(.tag_name)"')
-          # 循环删除 release 和 tag
           while read -r release_id tag_name; do
-            # 删除 release
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               "https://api.github.com/repos/$REPO/releases/$release_id"
-            # 删除 tag，refs/tags/{tag_name}
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               "https://api.github.com/repos/$REPO/git/refs/tags/$tag_name"
             echo "Deleted release $release_id and tag $tag_name"
