@@ -134,12 +134,18 @@ jobs:
         EOF
         
         echo "Successfully created custom distfeeds.conf."
-    - name: Patch libwebsockets Makefile
+
+    - name: Patch libwebsockets Makefile (Apply Solution 2)
+      working-directory: ${{ env.OPENWRT_PATH }} # <-- 关键：指定工作目录
       run: |
-        # 这会在 libwebsockets 的 CMake 定义块中追加 CMAKE_ARGS 参数
+        echo "Current directory: $PWD"
+        echo "Patching libwebsockets Makefile..."
+        # 在 Makefile 中找到 libwebsockets 的 Cmake 定义，并追加策略版本号
         sed -i '/define Package\/libwebsockets\/cmake/a \
           CMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         ' feeds/packages/libs/libwebsockets/Makefile
+        echo "Patch applied successfully."
+    
 
 
     - name: Compile Firmware(开始编译固件)
