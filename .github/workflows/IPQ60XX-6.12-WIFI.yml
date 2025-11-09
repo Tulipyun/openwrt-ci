@@ -135,28 +135,58 @@ jobs:
         
         echo "Successfully created custom distfeeds.conf."
 
-    - name: Patch libwebsockets Makefile (Apply Solution 2)
-      working-directory: ${{ env.OPENWRT_PATH }} # <-- 关键：指定工作目录
+    - name: Patch Problematic Makefiles (libnatpmp & libwebsockets)
+      working-directory: ${{ env.OPENWRT_PATH }}
       run: |
-        echo "Current directory: $PWD"
-        echo "Patching libwebsockets Makefile..."
-        # 在 Makefile 中找到 libwebsockets 的 Cmake 定义，并追加策略版本号
-        sed -i '/define Package\/libwebsockets\/cmake/a \
-          CMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-        ' feeds/packages/libs/libwebsockets/Makefile
-        echo "Patch applied successfully."
-    
+        LWS_MAKEFILE="feeds/packages/libs/libwebsockets/Makefile"
+        LNP_MAKEFILE="feeds/packages/libs/libnatpmp/Makefile"
+        
+        echo "--- Patching libnatpmp ---"
+        if [ -f "$LNP_MAKEFILE" ]; then
+          # 在 libnatpmp 的 Makefile 中 "endef" 之前插入 CMAKE_ARGS
+          sed -i '/^define Package\/libnatpmp\/cmake$/,/^endef$/ {
+              /endef/i \
+              \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          }' "$LNP_MAKEFILE"
+          
+          # 验证补丁是否成功
+          if grep -q "CMAKE_POLICY_VERSION_MINIMUM=3.5" "$LNP_MAKEFILE"; then
+            echo "libnatpmp patch applied successfully."
+          else
+            echo "Error: libnatpmp patch FAILED!"
+            exit 1
+          fi
+        else
+          echo "Warning: $LNP_MAKEFILE not found, skipping patch."
+        fi
 
+        echo "--- Patching libwebsockets ---"
+        if [ -f "$LWS_MAKEFILE" ]; then
+          # 在 libwebsockets 的 Makefile 中 "endef" 之前插入 CMAKE_ARGS
+          sed -i '/^define Package\/libwebsockets\/cmake$/,/^endef$/ {
+              /endef/i \
+              \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          }' "$LWS_MAKEFILE"
+          
+          # 验证补丁是否成功
+          if grep -q "CMAKE_POLICY_VERSION_MINIMUM=3.5" "$LWS_MAKEFILE"; then
+            echo "libwebsockets patch applied successfully."
+          else
+            echo "Error: libwebsockets patch FAILED!"
+            exit 1
+          fi
+        else
+          echo "Warning: $LWS_MAKEFILE not found, skipping patch."
+        fi
 
     - name: Compile Firmware(开始编译固件)
       id: compile
       run: |
         cd $OPENWRT_PATH
-        echo "Compiling with 1 thread and verbose output for debugging..."
-        # 使用 -j1 V=s 强制单线程和详细日志，以便我们看到第一个确切的错误
-        make -j1 V=s
+        echo -e "$(nproc) thread compile"
+        # 恢复回多线程编译
+        make -j$(nproc) || make -j1 || make -j1 V=s 
         
-        # 如果编译成功，才继续
         echo "status=success" >> $GITHUB_OUTPUT
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
