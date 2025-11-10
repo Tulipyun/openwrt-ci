@@ -143,10 +143,11 @@ jobs:
         
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
-          # 此逻辑已验证为正确
-          sed -i '/^define Package\/libnatpmp$/,/^endef$/ {
-              /endef/i \
-              \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          # 【【【这是 libnatpmp 的最终修正】】】
+          # 插入到 'Build/Configure' 块中，'$(call Build/Configure/CMake)' 之前
+          sed -i '/^define Build\/Configure$/,/endef/ { 
+            /$(call Build\/Configure\/CMake)/i \
+            \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           }' "$LNP_MAKEFILE"
           
           # 验证补丁是否成功
@@ -162,8 +163,9 @@ jobs:
 
         echo "--- Patching libwebsockets-full ---"
         if [ -f "$LWS_MAKEFILE" ]; then
-          # 【【【这是本次的最终修正】】】
-          # 错误日志显示 (build variant: full)，因此我们必须修补 "libwebsockets-full" 定义块
+          # 【【【这是 libwebsockets 的最终修正】】】
+          # 插入到 'Package/libwebsockets-full' 块中，'endef' 之前
+          # 这个逻辑是正确的，保持不变
           sed -i '/^define Package\/libwebsockets-full$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
