@@ -143,13 +143,13 @@ jobs:
         
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
-          # 【【【这是 libnatpmp 的最终修正 V3】】】
-          # 放弃 'insert before $(call ...)' 的复杂逻辑
-          # 退回到 'insert before endef' 的简单逻辑，并应用在正确的 'Build/Configure' 块上
-          sed -i '/^define Build\/Configure$/,/^endef$/ { 
-            /endef/i \
-            \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-          }' "$LNP_MAKEFILE"
+          # 【【【这是 libnatpmp 的真正修正】】】
+          # 不再搜索 'Build/Configure'，而是找到 'CMAKE_OPTIONS +=' 这一行
+          # 并在此后追加(a)我们的新参数。
+          # ' \\' 是必须的，以保持 Makefile 多行变量的格式。
+          sed -i '/^CMAKE_OPTIONS \+=/a \
+            \t-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \\
+          ' "$LNP_MAKEFILE"
           
           # 验证补丁是否成功
           if grep -q "CMAKE_POLICY_VERSION_MINIMUM=3.5" "$LNP_MAKEFILE"; then
