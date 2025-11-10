@@ -144,6 +144,7 @@ jobs:
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
           # 修正：libnatpmp 的定义块是 "Package/libnatpmp"，没有 "/cmake"
+          # 此逻辑在上一次已验证为正确
           sed -i '/^define Package\/libnatpmp$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
@@ -162,8 +163,9 @@ jobs:
 
         echo "--- Patching libwebsockets ---"
         if [ -f "$LWS_MAKEFILE" ]; then
-          # libwebsockets 的定义块 "Package/libwebsockets/cmake" 是正确的，保持不变
-          sed -i '/^define Package\/libwebsockets\/cmake$/,/^endef$/ {
+          # 【【【这是本次的修正】】】
+          # libwebsockets 的定义块也应该是 "Package/libwebsockets"，而不是 "Package/libwebsockets/cmake"
+          sed -i '/^define Package\/libwebsockets$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           }' "$LWS_MAKEFILE"
@@ -178,7 +180,6 @@ jobs:
         else
           echo "Warning: $LWS_MAKEFILE not found, skipping patch."
         fi
-
     - name: Compile Firmware(开始编译固件)
       id: compile
       run: |
