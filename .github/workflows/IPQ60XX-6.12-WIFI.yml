@@ -135,7 +135,7 @@ jobs:
         
         echo "Successfully created custom distfeeds.conf."
 
-    - name: Patch Problematic Makefiles (libnatpmp & libwebsockets)
+    - name: Patch Problematic Makefiles (libnatpmp & libwebsockets-full)
       working-directory: ${{ env.OPENWRT_PATH }}
       run: |
         LWS_MAKEFILE="feeds/packages/libs/libwebsockets/Makefile"
@@ -143,8 +143,7 @@ jobs:
         
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
-          # 修正：libnatpmp 的定义块是 "Package/libnatpmp"，没有 "/cmake"
-          # 此逻辑在上一次已验证为正确
+          # 此逻辑已验证为正确
           sed -i '/^define Package\/libnatpmp$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
@@ -161,11 +160,11 @@ jobs:
           echo "Warning: $LNP_MAKEFILE not found, skipping patch."
         fi
 
-        echo "--- Patching libwebsockets ---"
+        echo "--- Patching libwebsockets-full ---"
         if [ -f "$LWS_MAKEFILE" ]; then
-          # 【【【这是本次的修正】】】
-          # libwebsockets 的定义块也应该是 "Package/libwebsockets"，而不是 "Package/libwebsockets/cmake"
-          sed -i '/^define Package\/libwebsockets$/,/^endef$/ {
+          # 【【【这是本次的最终修正】】】
+          # 错误日志显示 (build variant: full)，因此我们必须修补 "libwebsockets-full" 定义块
+          sed -i '/^define Package\/libwebsockets-full$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           }' "$LWS_MAKEFILE"
@@ -180,6 +179,7 @@ jobs:
         else
           echo "Warning: $LWS_MAKEFILE not found, skipping patch."
         fi
+        
     - name: Compile Firmware(开始编译固件)
       id: compile
       run: |
