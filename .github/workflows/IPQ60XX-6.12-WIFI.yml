@@ -143,10 +143,11 @@ jobs:
         
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
-          # 【【【这是 libnatpmp 的最终修正】】】
-          # 插入到 'Build/Configure' 块中，'$(call Build/Configure/CMake)' 之前
-          sed -i '/^define Build\/Configure$/,/endef/ { 
-            /$(call Build\/Configure\/CMake)/i \
+          # 【【【这是 libnatpmp 的最终修正 V3】】】
+          # 放弃 'insert before $(call ...)' 的复杂逻辑
+          # 退回到 'insert before endef' 的简单逻辑，并应用在正确的 'Build/Configure' 块上
+          sed -i '/^define Build\/Configure$/,/^endef$/ { 
+            /endef/i \
             \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           }' "$LNP_MAKEFILE"
           
@@ -163,9 +164,7 @@ jobs:
 
         echo "--- Patching libwebsockets-full ---"
         if [ -f "$LWS_MAKEFILE" ]; then
-          # 【【【这是 libwebsockets 的最终修正】】】
-          # 插入到 'Package/libwebsockets-full' 块中，'endef' 之前
-          # 这个逻辑是正确的，保持不变
+          # 这个 'insert before endef' 逻辑是正确的，保持不变
           sed -i '/^define Package\/libwebsockets-full$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
