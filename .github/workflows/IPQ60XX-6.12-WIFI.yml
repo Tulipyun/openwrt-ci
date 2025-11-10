@@ -143,8 +143,8 @@ jobs:
         
         echo "--- Patching libnatpmp ---"
         if [ -f "$LNP_MAKEFILE" ]; then
-          # 在 libnatpmp 的 Makefile 中 "endef" 之前插入 CMAKE_ARGS
-          sed -i '/^define Package\/libnatpmp\/cmake$/,/^endef$/ {
+          # 修正：libnatpmp 的定义块是 "Package/libnatpmp"，没有 "/cmake"
+          sed -i '/^define Package\/libnatpmp$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           }' "$LNP_MAKEFILE"
@@ -162,7 +162,7 @@ jobs:
 
         echo "--- Patching libwebsockets ---"
         if [ -f "$LWS_MAKEFILE" ]; then
-          # 在 libwebsockets 的 Makefile 中 "endef" 之前插入 CMAKE_ARGS
+          # libwebsockets 的定义块 "Package/libwebsockets/cmake" 是正确的，保持不变
           sed -i '/^define Package\/libwebsockets\/cmake$/,/^endef$/ {
               /endef/i \
               \tCMAKE_ARGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
