@@ -108,6 +108,8 @@ jobs:
         # 移除 openwrt feeds 过时的luci版本
         rm -rf feeds/luci/applications/luci-app-passwall
         git clone https://github.com/xiaorouji/openwrt-passwall package/passwall-luci
+        # 移除不需要的智能辅助系统更新
+        rm -rf feeds/luci/applications/luci-app-attendedsysupgrade
   
     - name: Load Custom Configuration(加载自定义配置)
       run: |
