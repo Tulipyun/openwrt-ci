@@ -117,13 +117,19 @@ jobs:
         cd "$OPENWRT_PATH"
         # 用 sbwml 仓库替换 feeds 的 golang（26.x 分支，也可改成 25.x 对应分支/提交）
         rm -rf feeds/packages/lang/golang
-        git clone --depth 1 -b 26.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+        git clone --depth 1 -b 25.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
 
         # 二次安装以刷新符号链接（可选但推荐）
         ./scripts/feeds install -a
 
-        # 清理来自缓存的旧 host Go，避免仍然使用 1.25.5
-        rm -rf build_dir/hostpkg/go-* staging_dir/hostpkg/bin/go* staging_dir/hostpkg/lib/go
+        # 彻底清理旧的 host Go 与 go 构建缓存 / 模块缓存
+        
+        rm -rf build_dir/hostpkg/go-* \
+                         staging_dir/hostpkg/bin/go* \
+                         staging_dir/hostpkg/lib/go \
+                         tmp/go-build \
+                         dl/go-mod-cach
+
 
         # 预编译 host Go，确保版本到位
         make package/golang/host/compile -j"$(nproc)" V=s
