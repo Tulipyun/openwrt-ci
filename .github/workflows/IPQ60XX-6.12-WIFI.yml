@@ -110,6 +110,29 @@ jobs:
         git clone https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
         # 移除不需要的智能辅助系统更新
         # rm -rf feeds/luci/applications/luci-app-attendedsysupgrade
+    
+    
+     - name: Bump Go toolchain for OpenWrt (xray-core needs Go ≥ 1.25.6)
+       run: |
+         cd "$OPENWRT_PATH"
+         # 用 sbwml 仓库替换 feeds 的 golang（26.x 分支，也可改成 25.x 对应分支/提交）
+         rm -rf feeds/packages/lang/golang
+         git clone --depth 1 -b 26.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+
+         # 二次安装以刷新符号链接（可选但推荐）
+         ./scripts/feeds install -a
+
+         # 清理来自缓存的旧 host Go，避免仍然使用 1.25.5
+         rm -rf build_dir/hostpkg/go-* staging_dir/hostpkg/bin/go* staging_dir/hostpkg/lib/go
+
+         # 预编译 host Go，确保版本到位
+         make package/golang/host/compile -j"$(nproc)" V=s
+
+         # 确认 OpenWrt 实际使用的 go 版本
+         staging_dir/hostpkg/bin/go version || true
+         # 参考：OpenWrt 编译 Go 包使用的是 feeds 的 host Go；xray-core 要求 Go ≥ 1.25.6
+
+
   
     - name: Load Custom Configuration(加载自定义配置)
       run: |
