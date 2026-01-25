@@ -60,6 +60,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@main
 
+    - name: Set up Go 1.25.6
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.6'
+
+
     - name: Clone Source Code(克隆源代码)
       run: |
         df -hT $GITHUB_WORKSPACE
