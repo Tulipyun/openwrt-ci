@@ -111,6 +111,16 @@ jobs:
         # 移除不需要的智能辅助系统更新
         # rm -rf feeds/luci/applications/luci-app-attendedsysupgrade
         
+    - name: Fix mbedtls compile error (Disable FORTIFY_SOURCE)
+      run: |
+        cd openwrt
+        echo "Patching mbedtls Makefile to disable FORTIFY_SOURCE..."
+        # 在 PKG_RELEASE 变量后追加 PKG_FORTIFY_SOURCE:=0
+        sed -i '/PKG_RELEASE:=/a PKG_FORTIFY_SOURCE:=0' package/libs/mbedtls/Makefile
+          
+        # 可选：打印出来确认修改是否成功
+        grep -n "PKG_FORTIFY_SOURCE" package/libs/mbedtls/Makefile
+        
         
     - name: Bump Go toolchain for OpenWrt (xray-core needs Go >= 1.25.6)
       run: |
