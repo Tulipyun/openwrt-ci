@@ -122,12 +122,12 @@ jobs:
         grep -n "PKG_FORTIFY_SOURCE" package/libs/mbedtls/Makefile
         
         
-    - name: Bump Go toolchain for OpenWrt (xray-core needs Go >= 1.25.6)
+    - name: Bump Go toolchain for OpenWrt (xray-core needs Go >= 1.26)
       run: |
         cd "$OPENWRT_PATH"
         # 用 sbwml 仓库替换 feeds 的 golang（26.x 分支，也可改成 25.x 对应分支/提交）
         rm -rf feeds/packages/lang/golang
-        git clone --depth 1 -b 25.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+        git clone --depth 1 -b 26.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
 
         # 二次安装以刷新符号链接（可选但推荐）
         ./scripts/feeds install -a
@@ -145,7 +145,7 @@ jobs:
         make package/golang/host/compile -j"$(nproc)" V=s
 
         # 确认 OpenWrt 实际使用的 go 版本
-        staging_dir/hostpkg/bin/go version || tru
+        staging_dir/hostpkg/bin/go version || true
 
  
     - name: Load Custom Configuration(加载自定义配置)
